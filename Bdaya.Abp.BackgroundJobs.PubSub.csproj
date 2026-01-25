@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Bdaya.Abp.BackgroundJobs.PubSub</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Bdaya</Authors>
+    <Description>Google Cloud Pub/Sub integration for ABP Background Jobs</Description>
+    <PackageTags>abp;background-jobs;pubsub;google-cloud;job-queue;messaging</PackageTags>
+    <PackageProjectUrl>https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude test files from the main project -->
+    <Compile Remove="tests\**\*.cs" />
+    <None Remove="tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Cloud.PubSub.V1" Version="3.22.0" />
+    <PackageReference Include="Volo.Abp.BackgroundJobs.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+  
+</Project>

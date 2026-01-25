@@ -1,0 +1,27 @@
+# Test stage - runs tests against Pub/Sub emulator
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS test
+WORKDIR /src
+
+# Copy all project files
+COPY *.csproj .
+COPY *.sln .
+COPY Directory.Build.props .
+COPY Directory.Packages.props .
+COPY nuget.config .
+COPY global.json .
+
+# Copy test project files
+COPY tests/ tests/
+
+# Restore all projects
+RUN dotnet restore Bdaya.Abp.BackgroundJobs.PubSub.sln
+
+# Copy source code
+COPY *.cs .
+COPY README.md .
+
+# Build
+RUN dotnet build -c Release --no-restore
+
+# Run tests (exclude integration tests that need Docker-in-Docker)
+ENTRYPOINT ["dotnet", "test", "-c", "Release", "--no-build", "--filter", "FullyQualifiedName~UnitTests|FullyQualifiedName~OptionsTests|FullyQualifiedName~SerializerTests", "--logger:console;verbosity=normal"]

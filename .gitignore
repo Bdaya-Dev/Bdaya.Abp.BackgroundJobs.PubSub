@@ -1,0 +1,61 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild/
+bld/
+bin/
+obj/
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.csproj.user
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test Results
+[Tt]est[Rr]esult*/
+[Tt]est[Rr]eport*/
+*.trx
+*.coverage
+*.coveragexml
+
+# NCrunch
+*.ncrunch*
+_NCrunch_*
+.*crunch*.local.xml
+
+# Logs
+*.log
+logs/
+
+# Credentials and secrets
+*.json.local
+credentials.json
+service-account*.json
+
+# Local environment files
+.env
+.env.local
+*.local.json
+appsettings.*.local.json

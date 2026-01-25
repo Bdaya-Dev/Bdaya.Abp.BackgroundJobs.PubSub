@@ -1,0 +1,29 @@
+# Build results
+bin/
+obj/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vs/
+.idea/
+*.suo
+*.user
+
+# Test results
+TestResults/
+*.trx
+
+# Credentials
+*.json.local
+credentials.json
+service-account*.json
+
+# Documentation
+docs/
+
+# Local environment
+.env
+.env.local
