@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Bdaya.Abp.BackgroundJobs.PubSub.csproj" />
+    <ProjectReference Include="..\..\src\Bdaya.Abp.BackgroundJobs.PubSub.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -24,13 +24,7 @@
   </PropertyGroup>
   
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Exclude test files from the main project -->
-    <Compile Remove="tests\**\*.cs" />
-    <None Remove="tests\**\*" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
