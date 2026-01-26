@@ -7,8 +7,8 @@ using Volo.Abp.Modularity;
 namespace Bdaya.Abp.BackgroundJobs.PubSub.Tests;
 
 [DependsOn(
-    typeof(AbpBackgroundJobsPubSubModule),
     typeof(AbpBackgroundJobsModule),
+    typeof(AbpBackgroundJobsPubSubModule),
     typeof(AbpTestBaseModule),
     typeof(AbpAutofacModule)
 )]
