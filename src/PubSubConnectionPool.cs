@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Google.Apis.Auth.OAuth2;
 using Google.Cloud.PubSub.V1;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
@@ -97,12 +98,16 @@ public class PubSubConnectionPool : IPubSubConnectionPool, ISingletonDependency
             builder.Endpoint = connection.EmulatorHost;
             builder.ChannelCredentials = ChannelCredentials.Insecure;
         }
-        else if (!string.IsNullOrEmpty(connection.CredentialsPath))
+        else
         {
-            // Use service account credentials file
-            builder.CredentialsPath = connection.CredentialsPath;
+            // Apply credentials in order of precedence
+            var credential = GetCredential(connection);
+            if (credential != null)
+            {
+                builder.Credential = credential;
+            }
+            // else: Use Application Default Credentials (ADC)
         }
-        // else: Use Application Default Credentials (ADC)
 
         return await builder.BuildAsync();
     }
@@ -117,14 +122,49 @@ public class PubSubConnectionPool : IPubSubConnectionPool, ISingletonDependency
             builder.Endpoint = connection.EmulatorHost;
             builder.ChannelCredentials = ChannelCredentials.Insecure;
         }
-        else if (!string.IsNullOrEmpty(connection.CredentialsPath))
+        else
         {
-            // Use service account credentials file
-            builder.CredentialsPath = connection.CredentialsPath;
+            // Apply credentials in order of precedence
+            var credential = GetCredential(connection);
+            if (credential != null)
+            {
+                builder.Credential = credential;
+            }
+            // else: Use Application Default Credentials (ADC)
         }
-        // else: Use Application Default Credentials (ADC)
 
         return await builder.BuildAsync();
+    }
+
+    /// <summary>
+    /// Gets the credential to use based on configuration priority:
+    /// 1. Pre-configured GoogleCredential instance
+    /// 2. JSON credentials string
+    /// 3. Credentials file path
+    /// 4. null (uses ADC)
+    /// </summary>
+    private static GoogleCredential? GetCredential(PubSubConnectionConfiguration connection)
+    {
+        // Priority 1: Pre-configured credential instance
+        if (connection.Credential != null)
+        {
+            return connection.Credential;
+        }
+
+        // Priority 2: JSON string (from secret manager, etc.)
+        if (!string.IsNullOrEmpty(connection.CredentialsJson))
+        {
+            return GoogleCredential.FromJson(connection.CredentialsJson);
+        }
+
+        // Priority 3: File path
+        if (!string.IsNullOrEmpty(connection.CredentialsPath))
+        {
+            return GoogleCredential.FromFile(connection.CredentialsPath);
+        }
+
+        // Priority 4: ADC (return null to let the builder use default)
+        return null;
     }
 
     public void Dispose()
