@@ -14,7 +14,6 @@
 
   <PropertyGroup>
     <PackageId>Bdaya.Abp.BackgroundJobs.PubSub</PackageId>
-    <Version>1.0.0</Version>
     <Authors>Bdaya</Authors>
     <Description>Google Cloud Pub/Sub integration for ABP Background Jobs</Description>
     <PackageTags>abp;background-jobs;pubsub;google-cloud;job-queue;messaging</PackageTags>

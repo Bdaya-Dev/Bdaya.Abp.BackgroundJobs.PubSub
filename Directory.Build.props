@@ -1,3 +1,5 @@
 <Project>
-  <!-- Empty: prevents inheriting from any parent Directory.Build.props -->
+  <PropertyGroup>
+    <Version>0.0.0</Version>
+  </PropertyGroup>
 </Project>
