@@ -45,24 +45,25 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         Logger = logger;
     }
 
-    public virtual async Task InitializeAsync()
+    public virtual Task InitializeAsync()
     {
         if (_initialized)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         lock (_initLock)
         {
             if (_initialized)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             _initialized = true;
         }
 
         Logger.LogInformation("Initializing Pub/Sub Background Job Manager...");
+        return Task.CompletedTask;
     }
 
     public virtual async Task<string> EnqueueAsync<TArgs>(TArgs args, BackgroundJobPriority priority = BackgroundJobPriority.Normal,

@@ -9,10 +9,15 @@ namespace Bdaya.Abp.BackgroundJobs.PubSub;
 public interface IPubSubBackgroundJobManager : IBackgroundJobManager
 {
     /// <summary>
-    /// Initializes the Pub/Sub background job manager.
+    /// Initializes the Pub/Sub background job manager asynchronously.
     /// Creates topics and subscriptions as needed.
     /// </summary>
     Task InitializeAsync();
+
+    /// <summary>
+    /// Starts processing jobs for a specific job type.
+    /// </summary>
+    Task StartProcessingAsync<TArgs>() where TArgs : class;
 
     /// <summary>
     /// Stops the background job processing.
