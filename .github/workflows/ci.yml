@@ -31,6 +31,11 @@ jobs:
         run: dotnet build --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test --configuration Release --no-build --verbosity normal
-        working-directory: tests/Bdaya.Abp.BackgroundJobs.PubSub.Tests
-        continue-on-error: true
+        run: dotnet test tests/Bdaya.Abp.BackgroundJobs.PubSub.Tests --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: tests/Bdaya.Abp.BackgroundJobs.PubSub.Tests/TestResults/*.trx
