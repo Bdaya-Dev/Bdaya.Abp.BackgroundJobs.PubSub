@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v1.0.0...v1.1.0) (2026-01-26)
+
+
+### Features
+
+* enhance authentication options in Pub/Sub configuration ([0f702e5](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/0f702e5adfb4b160ac09d3cb804b6500afdcaf63))
+
 # 1.0.0 (2026-01-26)
 
 
