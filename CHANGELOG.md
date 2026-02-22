@@ -1,3 +1,11 @@
+## [2.0.3](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.0.2...v2.0.3) (2026-02-22)
+
+
+### Bug Fixes
+
+* **ci:** keep xUnit v3 apphost and build without --no-restore ([c38207b](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/c38207b18fa3f0ccf5f7cd5d39bdd05bd76ecb4d))
+* **tests:** ensure OutputType and UseAppHost are set for test project ([dc99b99](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/dc99b993e798d343424cda528150edf7e44a4e00))
+
 ## [2.0.2](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.0.1...v2.0.2) (2026-02-22)
 
 
