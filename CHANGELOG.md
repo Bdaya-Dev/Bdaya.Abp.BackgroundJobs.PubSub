@@ -1,3 +1,13 @@
+# [2.0.0](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v1.1.0...v2.0.0) (2026-02-22)
+
+
+* feat!: migrate BackgroundJobs PubSub to .NET 10 SDK, CPM, xUnit v3, and secure credential APIs ([98bc137](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/98bc1375b7579924d024155ec7697be5bf54819f))
+
+
+### BREAKING CHANGES
+
+* This release migrates test infrastructure to xUnit v3 and updates credential configuration behavior to use explicit GoogleCredential assignment instead of deprecated path-based APIs. Build/CI now require .NET 10 SDK while libraries continue targeting net9.0.
+
 # [1.1.0](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v1.0.0...v1.1.0) (2026-01-26)
 
 
