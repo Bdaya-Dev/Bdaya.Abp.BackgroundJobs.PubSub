@@ -1,5 +1,6 @@
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
+using System.Net.Sockets;
 
 namespace Bdaya.Abp.BackgroundJobs.PubSub.Tests;
 
@@ -10,30 +11,48 @@ public class PubSubEmulatorFixture : IAsyncLifetime
 {
     private IContainer? _container;
 
-    public string EmulatorHost => $"localhost:{Port}";
     public string ProjectId => "test-project";
-    public int Port { get; private set; }
+    public string EmulatorHost => $"localhost:{HostPort}";
+    public int HostPort { get; private set; }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        Port = Random.Shared.Next(10000, 60000);
-
-        _container = new ContainerBuilder()
-            .WithImage("gcr.io/google.com/cloudsdktool/cloud-sdk:emulators")
+        _container = new ContainerBuilder("gcr.io/google.com/cloudsdktool/cloud-sdk:emulators")
             .WithCommand("gcloud", "beta", "emulators", "pubsub", "start",
                 $"--host-port=0.0.0.0:8085",
                 $"--project={ProjectId}")
-            .WithPortBinding(Port, 8085)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(8085))
+            .WithPortBinding(8085, true)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Server started"))
             .Build();
 
         await _container.StartAsync();
 
-        // Give the emulator a moment to fully initialize
-        await Task.Delay(2000);
+        HostPort = _container.GetMappedPublicPort(8085);
+        await WaitForEmulatorAsync(TimeSpan.FromSeconds(30));
     }
 
-    public async Task DisposeAsync()
+    private async Task WaitForEmulatorAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                using var client = new TcpClient();
+                await client.ConnectAsync("localhost", HostPort);
+                return;
+            }
+            catch (SocketException)
+            {
+                await Task.Delay(100);
+            }
+        }
+
+        throw new TimeoutException($"Emulator at localhost:{HostPort} did not become available within {timeout.TotalSeconds} seconds");
+    }
+
+    public async ValueTask DisposeAsync()
     {
         if (_container != null)
         {

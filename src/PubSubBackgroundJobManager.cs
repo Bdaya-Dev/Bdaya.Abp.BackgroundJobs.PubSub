@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Google.Apis.Auth.OAuth2;
 using Google.Cloud.PubSub.V1;
 using Google.Protobuf;
 using Grpc.Core;
@@ -440,25 +441,51 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 subApiBuilder.ChannelCredentials = ChannelCredentials.Insecure;
             }
         }
-        else if (!string.IsNullOrEmpty(connection.CredentialsPath))
+        else
         {
+            var credential = GetCredential(connection);
+            if (credential == null)
+            {
+                return;
+            }
+
             if (builder is PublisherClientBuilder publisherBuilder)
             {
-                publisherBuilder.CredentialsPath = connection.CredentialsPath;
+                publisherBuilder.GoogleCredential = credential;
             }
             else if (builder is SubscriberClientBuilder subscriberBuilder)
             {
-                subscriberBuilder.CredentialsPath = connection.CredentialsPath;
+                subscriberBuilder.GoogleCredential = credential;
             }
             else if (builder is PublisherServiceApiClientBuilder apiBuilder)
             {
-                apiBuilder.CredentialsPath = connection.CredentialsPath;
+                apiBuilder.GoogleCredential = credential;
             }
             else if (builder is SubscriberServiceApiClientBuilder subApiBuilder)
             {
-                subApiBuilder.CredentialsPath = connection.CredentialsPath;
+                subApiBuilder.GoogleCredential = credential;
             }
         }
+    }
+
+    private static GoogleCredential? GetCredential(PubSubConnectionConfiguration connection)
+    {
+        if (connection.Credential != null)
+        {
+            return connection.Credential;
+        }
+
+        if (!string.IsNullOrEmpty(connection.CredentialsJson))
+        {
+            return CredentialFactory.FromJson<GoogleCredential>(connection.CredentialsJson);
+        }
+
+        if (!string.IsNullOrEmpty(connection.CredentialsPath))
+        {
+            return CredentialFactory.FromFile<GoogleCredential>(connection.CredentialsPath);
+        }
+
+        return null;
     }
 
     public virtual async Task StopAsync()

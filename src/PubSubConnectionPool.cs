@@ -154,13 +154,13 @@ public class PubSubConnectionPool : IPubSubConnectionPool, ISingletonDependency
         // Priority 2: JSON string (from secret manager, etc.)
         if (!string.IsNullOrEmpty(connection.CredentialsJson))
         {
-            return GoogleCredential.FromJson(connection.CredentialsJson);
+            return CredentialFactory.FromJson<GoogleCredential>(connection.CredentialsJson);
         }
 
         // Priority 3: File path
         if (!string.IsNullOrEmpty(connection.CredentialsPath))
         {
-            return GoogleCredential.FromFile(connection.CredentialsPath);
+            return CredentialFactory.FromFile<GoogleCredential>(connection.CredentialsPath);
         }
 
         // Priority 4: ADC (return null to let the builder use default)

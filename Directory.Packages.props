@@ -1,5 +1,19 @@
 <Project>
   <PropertyGroup>
-    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Google.Cloud.PubSub.V1" Version="3.32.0" />
+    <PackageVersion Include="Volo.Abp.BackgroundJobs.Abstractions" Version="9.3.7" />
+    <PackageVersion Include="coverlet.collector" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <PackageVersion Include="Testcontainers" Version="4.10.0" />
+    <PackageVersion Include="Volo.Abp.Autofac" Version="9.3.7" />
+    <PackageVersion Include="Volo.Abp.TestBase" Version="9.3.7" />
+    <PackageVersion Include="Volo.Abp.BackgroundJobs" Version="9.3.7" />
+  </ItemGroup>
 </Project>

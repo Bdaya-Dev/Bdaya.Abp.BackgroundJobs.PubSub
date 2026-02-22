@@ -12,18 +12,13 @@ namespace Bdaya.Abp.BackgroundJobs.PubSub.Tests;
 /// These tests require the Pub/Sub emulator to be running.
 /// </summary>
 [Collection("PubSubEmulator")]
-public class PubSubBackgroundJobManagerTests : IClassFixture<PubSubEmulatorFixture>, IAsyncLifetime
+public class PubSubBackgroundJobManagerTests(PubSubEmulatorFixture fixture) : IClassFixture<PubSubEmulatorFixture>, IAsyncLifetime
 {
-    private readonly PubSubEmulatorFixture _fixture;
+    private readonly PubSubEmulatorFixture _fixture = fixture;
     private IAbpApplicationWithInternalServiceProvider? _application;
     private IServiceScope? _scope;
 
-    public PubSubBackgroundJobManagerTests(PubSubEmulatorFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         // Set emulator configuration before creating the application
         PubSubTestModule.EmulatorHost = _fixture.EmulatorHost;
@@ -44,7 +39,7 @@ public class PubSubBackgroundJobManagerTests : IClassFixture<PubSubEmulatorFixtu
         PriorityJobHandler.Reset();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _scope?.Dispose();
 
