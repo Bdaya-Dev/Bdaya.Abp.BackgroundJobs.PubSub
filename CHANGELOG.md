@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.0.0...v2.0.1) (2026-02-22)
+
+
+### Bug Fixes
+
+* **ci:** restore Release assets before no-restore build ([ceeac1d](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/ceeac1d076c8907855e2fb72f58212e4ffe03a74))
+
 # [2.0.0](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v1.1.0...v2.0.0) (2026-02-22)
 
 
