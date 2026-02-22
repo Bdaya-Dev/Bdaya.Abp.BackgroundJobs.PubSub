@@ -28,7 +28,7 @@ jobs:
         run: dotnet restore -p:Configuration=Release
 
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build --configuration Release
 
       - name: Run tests
         run: dotnet test tests/Bdaya.Abp.BackgroundJobs.PubSub.Tests --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
