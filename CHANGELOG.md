@@ -1,3 +1,10 @@
+## [2.0.2](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.0.1...v2.0.2) (2026-02-22)
+
+
+### Bug Fixes
+
+* **ci:** pin .NET SDK via global.json for deterministic builds ([d1131a2](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/d1131a25b3daf0a03653d439ac8e61599a057007))
+
 ## [2.0.1](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.0.0...v2.0.1) (2026-02-22)
 
 
