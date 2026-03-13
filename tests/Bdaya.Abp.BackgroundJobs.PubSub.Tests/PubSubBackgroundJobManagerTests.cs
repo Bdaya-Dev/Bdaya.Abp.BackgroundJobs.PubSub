@@ -198,6 +198,40 @@ public class PubSubBackgroundJobManagerTests(PubSubEmulatorFixture fixture) : IC
     }
 
     [Fact]
+    public async Task Should_Execute_Job_Handler_EndToEnd()
+    {
+        // Arrange — this is the critical test that validates the full
+        // enqueue → subscribe → deserialize → resolve handler → execute path.
+        // It catches the bug where ExecuteJobAsync passed argsType instead of
+        // the handler jobType to BackgroundJobExecuter.
+        var jobManager = _scope!.ServiceProvider.GetRequiredService<IPubSubBackgroundJobManager>();
+        TestJobHandler.Reset();
+
+        var args = new TestJobArgs
+        {
+            Message = "E2E Test",
+            Value = 999
+        };
+
+        // Act — start subscriber, then enqueue
+        await jobManager.StartProcessingAsync<TestJobArgs>();
+        await jobManager.EnqueueAsync(args);
+
+        // Assert — wait for the handler to process the message
+        var timeout = TimeSpan.FromSeconds(15);
+        var deadline = DateTime.UtcNow + timeout;
+        while (TestJobHandler.ExecutionCount == 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+
+        TestJobHandler.ExecutionCount.ShouldBeGreaterThan(0, "Job handler was never invoked — ExecuteJobAsync likely passed the wrong type to BackgroundJobExecuter.");
+        var processed = TestJobHandler.ProcessedJobs.First();
+        processed.Message.ShouldBe("E2E Test");
+        processed.Value.ShouldBe(999);
+    }
+
+    [Fact]
     public void ConnectionPool_Should_Throw_For_Unknown_Connection()
     {
         // Arrange

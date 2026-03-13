@@ -17,10 +17,15 @@ namespace Bdaya.Abp.BackgroundJobs.PubSub;
 /// Provides FIFO job processing using Pub/Sub messaging.
 /// </summary>
 [Dependency(ReplaceServices = true)]
-[ExposeServices(typeof(IBackgroundJobManager), typeof(IPubSubBackgroundJobManager), typeof(PubSubBackgroundJobManager))]
+[ExposeServices(
+    typeof(IBackgroundJobManager),
+    typeof(IPubSubBackgroundJobManager),
+    typeof(PubSubBackgroundJobManager)
+)]
 public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingletonDependency
 {
     protected AbpPubSubBackgroundJobOptions Options { get; }
+    protected AbpBackgroundJobOptions BackgroundJobOptions { get; }
     protected IPubSubConnectionPool ConnectionPool { get; }
     protected IPubSubJobSerializer Serializer { get; }
     protected IServiceScopeFactory ServiceScopeFactory { get; }
@@ -28,18 +33,21 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
 
     protected ConcurrentDictionary<System.Type, SubscriberClient> Subscribers { get; } = new();
     protected ConcurrentDictionary<System.Type, TopicName> Topics { get; } = new();
-    
+
     private bool _initialized;
     private readonly object _initLock = new();
 
     public PubSubBackgroundJobManager(
         IOptions<AbpPubSubBackgroundJobOptions> options,
+        IOptions<AbpBackgroundJobOptions> backgroundJobOptions,
         IPubSubConnectionPool connectionPool,
         IPubSubJobSerializer serializer,
         IServiceScopeFactory serviceScopeFactory,
-        ILogger<PubSubBackgroundJobManager> logger)
+        ILogger<PubSubBackgroundJobManager> logger
+    )
     {
         Options = options.Value;
+        BackgroundJobOptions = backgroundJobOptions.Value;
         ConnectionPool = connectionPool;
         Serializer = serializer;
         ServiceScopeFactory = serviceScopeFactory;
@@ -67,8 +75,11 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         return Task.CompletedTask;
     }
 
-    public virtual async Task<string> EnqueueAsync<TArgs>(TArgs args, BackgroundJobPriority priority = BackgroundJobPriority.Normal,
-        TimeSpan? delay = null)
+    public virtual async Task<string> EnqueueAsync<TArgs>(
+        TArgs args,
+        BackgroundJobPriority priority = BackgroundJobPriority.Normal,
+        TimeSpan? delay = null
+    )
     {
         var argsType = typeof(TArgs);
         var queueConfig = Options.GetOrCreateJobQueue<TArgs>();
@@ -90,19 +101,17 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         TArgs args,
         System.Type argsType,
         JobQueueConfiguration queueConfig,
-        TimeSpan delay)
+        TimeSpan delay
+    )
     {
         var connection = ConnectionPool.GetConnection(queueConfig.ConnectionName);
-        
+
         // For delayed jobs, we use message attributes to store the scheduled time
         // The subscriber will check if the job is ready to execute
         var delayedTopicName = await EnsureDelayedTopicExistsAsync(argsType, queueConfig);
         var scheduledTime = DateTime.UtcNow.Add(delay);
 
-        var builder = new PublisherClientBuilder
-        {
-            TopicName = delayedTopicName
-        };
+        var builder = new PublisherClientBuilder { TopicName = delayedTopicName };
 
         ConfigureClientBuilder(builder, connection);
 
@@ -118,7 +127,8 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 Data = ByteString.CopyFrom(body),
                 Attributes =
                 {
-                    ["JobArgsType"] = argsType.AssemblyQualifiedName ?? argsType.FullName ?? argsType.Name,
+                    ["JobArgsType"] =
+                        argsType.AssemblyQualifiedName ?? argsType.FullName ?? argsType.Name,
                     ["MessageId"] = messageId,
                     ["ScheduledTime"] = scheduledTime.ToString("O"),
                     ["Priority"] = BackgroundJobPriority.Normal.ToString()
@@ -131,7 +141,8 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 "Enqueued delayed job to Pub/Sub. System.Type: {JobType}, MessageId: {MessageId}, ScheduledTime: {ScheduledTime}",
                 argsType.Name,
                 publishedId,
-                scheduledTime);
+                scheduledTime
+            );
 
             return messageId;
         }
@@ -146,14 +157,12 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         TArgs args,
         System.Type argsType,
         JobQueueConfiguration queueConfig,
-        BackgroundJobPriority priority)
+        BackgroundJobPriority priority
+    )
     {
         var connection = ConnectionPool.GetConnection(queueConfig.ConnectionName);
 
-        var builder = new PublisherClientBuilder
-        {
-            TopicName = topicName
-        };
+        var builder = new PublisherClientBuilder { TopicName = topicName };
 
         ConfigureClientBuilder(builder, connection);
 
@@ -169,7 +178,8 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 Data = ByteString.CopyFrom(body),
                 Attributes =
                 {
-                    ["JobArgsType"] = argsType.AssemblyQualifiedName ?? argsType.FullName ?? argsType.Name,
+                    ["JobArgsType"] =
+                        argsType.AssemblyQualifiedName ?? argsType.FullName ?? argsType.Name,
                     ["MessageId"] = messageId,
                     ["Priority"] = priority.ToString(),
                     ["EnqueuedAt"] = DateTime.UtcNow.ToString("O")
@@ -182,7 +192,8 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 "Enqueued job to Pub/Sub. System.Type: {JobType}, MessageId: {MessageId}, Topic: {Topic}",
                 argsType.Name,
                 publishedId,
-                topicName.ToString());
+                topicName.ToString()
+            );
 
             return messageId;
         }
@@ -192,7 +203,10 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         }
     }
 
-    protected virtual async Task<TopicName> EnsureTopicExistsAsync(System.Type argsType, JobQueueConfiguration queueConfig)
+    protected virtual async Task<TopicName> EnsureTopicExistsAsync(
+        System.Type argsType,
+        JobQueueConfiguration queueConfig
+    )
     {
         if (Topics.TryGetValue(argsType, out var existingTopic))
         {
@@ -211,15 +225,23 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         return topicName;
     }
 
-    protected virtual async Task<TopicName> EnsureDelayedTopicExistsAsync(System.Type argsType, JobQueueConfiguration queueConfig)
+    protected virtual async Task<TopicName> EnsureDelayedTopicExistsAsync(
+        System.Type argsType,
+        JobQueueConfiguration queueConfig
+    )
     {
         if (string.IsNullOrEmpty(queueConfig.DelayedTopicName))
         {
-            throw new AbpException($"Delayed topic not configured for job System.Type {argsType.Name}");
+            throw new AbpException(
+                $"Delayed topic not configured for job System.Type {argsType.Name}"
+            );
         }
 
         var connection = ConnectionPool.GetConnection(queueConfig.ConnectionName);
-        var topicName = TopicName.FromProjectTopic(connection.ProjectId, queueConfig.DelayedTopicName);
+        var topicName = TopicName.FromProjectTopic(
+            connection.ProjectId,
+            queueConfig.DelayedTopicName
+        );
 
         if (Options.AutoCreateTopics)
         {
@@ -229,7 +251,10 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         return topicName;
     }
 
-    protected virtual async Task CreateTopicIfNotExistsAsync(TopicName topicName, string connectionName)
+    protected virtual async Task CreateTopicIfNotExistsAsync(
+        TopicName topicName,
+        string connectionName
+    )
     {
         try
         {
@@ -247,12 +272,14 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
     protected virtual async Task<SubscriptionName> EnsureSubscriptionExistsAsync(
         System.Type argsType,
         JobQueueConfiguration queueConfig,
-        TopicName topicName)
+        TopicName topicName
+    )
     {
         var connection = ConnectionPool.GetConnection(queueConfig.ConnectionName);
         var subscriptionName = SubscriptionName.FromProjectSubscription(
             connection.ProjectId,
-            queueConfig.SubscriptionName);
+            queueConfig.SubscriptionName
+        );
 
         if (Options.AutoCreateSubscriptions)
         {
@@ -265,16 +292,21 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
     protected virtual async Task CreateSubscriptionIfNotExistsAsync(
         SubscriptionName subscriptionName,
         TopicName topicName,
-        JobQueueConfiguration queueConfig)
+        JobQueueConfiguration queueConfig
+    )
     {
         try
         {
-            var subscriberClient = await ConnectionPool.GetSubscriberAsync(queueConfig.ConnectionName);
+            var subscriberClient = await ConnectionPool.GetSubscriberAsync(
+                queueConfig.ConnectionName
+            );
             await subscriberClient.GetSubscriptionAsync(subscriptionName);
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
         {
-            var subscriberClient = await ConnectionPool.GetSubscriberAsync(queueConfig.ConnectionName);
+            var subscriberClient = await ConnectionPool.GetSubscriberAsync(
+                queueConfig.ConnectionName
+            );
             var connection = ConnectionPool.GetConnection(queueConfig.ConnectionName);
 
             var request = new Subscription
@@ -282,15 +314,21 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 SubscriptionName = subscriptionName,
                 TopicAsTopicName = topicName,
                 AckDeadlineSeconds = queueConfig.AckDeadlineSeconds,
-                MessageRetentionDuration = Google.Protobuf.WellKnownTypes.Duration.FromTimeSpan(queueConfig.MessageRetentionDuration)
+                MessageRetentionDuration = Google.Protobuf.WellKnownTypes.Duration.FromTimeSpan(
+                    queueConfig.MessageRetentionDuration
+                )
             };
 
             // Configure dead letter if enabled
-            if (!string.IsNullOrEmpty(Options.DeadLetterTopicSuffix) && queueConfig.MaxDeliveryAttempts.HasValue)
+            if (
+                !string.IsNullOrEmpty(Options.DeadLetterTopicSuffix)
+                && queueConfig.MaxDeliveryAttempts.HasValue
+            )
             {
                 var deadLetterTopicName = TopicName.FromProjectTopic(
                     connection.ProjectId,
-                    $"{queueConfig.TopicName}.{Options.DeadLetterTopicSuffix}");
+                    $"{queueConfig.TopicName}.{Options.DeadLetterTopicSuffix}"
+                );
 
                 await CreateTopicIfNotExistsAsync(deadLetterTopicName, queueConfig.ConnectionName);
 
@@ -302,7 +340,10 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
             }
 
             await subscriberClient.CreateSubscriptionAsync(request);
-            Logger.LogInformation("Created Pub/Sub subscription: {SubscriptionName}", subscriptionName.ToString());
+            Logger.LogInformation(
+                "Created Pub/Sub subscription: {SubscriptionName}",
+                subscriptionName.ToString()
+            );
         }
     }
 
@@ -316,7 +357,11 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         var queueConfig = Options.GetOrCreateJobQueue<TArgs>();
 
         var topicName = await EnsureTopicExistsAsync(argsType, queueConfig);
-        var subscriptionName = await EnsureSubscriptionExistsAsync(argsType, queueConfig, topicName);
+        var subscriptionName = await EnsureSubscriptionExistsAsync(
+            argsType,
+            queueConfig,
+            topicName
+        );
 
         var connection = ConnectionPool.GetConnection(queueConfig.ConnectionName);
 
@@ -327,7 +372,8 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
             {
                 FlowControlSettings = new Google.Api.Gax.FlowControlSettings(
                     maxOutstandingElementCount: queueConfig.PrefetchCount ?? Options.PrefetchCount,
-                    maxOutstandingByteCount: null)
+                    maxOutstandingByteCount: null
+                )
             }
         };
 
@@ -337,21 +383,25 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         Subscribers[argsType] = subscriberClient;
 
         // Start processing messages in the background
-        _ = subscriberClient.StartAsync(async (message, cancellationToken) =>
-        {
-            return await ProcessJobMessageAsync<TArgs>(message, queueConfig, cancellationToken);
-        });
+        _ = subscriberClient.StartAsync(
+            async (message, cancellationToken) =>
+            {
+                return await ProcessJobMessageAsync<TArgs>(message, queueConfig, cancellationToken);
+            }
+        );
 
         Logger.LogInformation(
             "Started processing jobs for {JobType} from subscription {SubscriptionName}",
             argsType.Name,
-            subscriptionName.ToString());
+            subscriptionName.ToString()
+        );
     }
 
     protected virtual async Task<SubscriberClient.Reply> ProcessJobMessageAsync<TArgs>(
         PubsubMessage message,
         JobQueueConfiguration queueConfig,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
         where TArgs : class
     {
         try
@@ -374,23 +424,42 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
 
             if (jobArgs == null)
             {
-                Logger.LogWarning("Failed to deserialize job args for System.Type: {JobType}", argsType.Name);
+                Logger.LogError(
+                    "Failed to deserialize job args for System.Type: {JobType}",
+                    argsType.Name
+                );
                 return SubscriberClient.Reply.Ack; // Ack to prevent redelivery of invalid message
             }
 
             Logger.LogDebug(
                 "Processing job. System.Type: {JobType}, MessageId: {MessageId}",
                 argsType.Name,
-                message.MessageId);
+                message.MessageId
+            );
 
             // Execute the job
             await ExecuteJobAsync(argsType, jobArgs);
 
             return SubscriberClient.Reply.Ack;
         }
+        catch (AbpException ex)
+        {
+            // Non-transient errors (e.g. job type not registered in DI, missing handler)
+            // should be ACKed to prevent infinite retry loops — retrying won't fix them.
+            Logger.LogError(
+                ex,
+                "Non-transient error processing job message, acknowledging to prevent retry loop. MessageId: {MessageId}",
+                message.MessageId
+            );
+            return SubscriberClient.Reply.Ack;
+        }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error processing job message. MessageId: {MessageId}", message.MessageId);
+            Logger.LogError(
+                ex,
+                "Error processing job message. MessageId: {MessageId}",
+                message.MessageId
+            );
             return SubscriberClient.Reply.Nack;
         }
     }
@@ -399,23 +468,23 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
     {
         using var scope = ServiceScopeFactory.CreateScope();
 
-        var jobExecuterType = typeof(IBackgroundJobExecuter);
-        var jobExecuter = scope.ServiceProvider.GetRequiredService(jobExecuterType) as IBackgroundJobExecuter;
+        var jobExecuter = scope.ServiceProvider.GetRequiredService<IBackgroundJobExecuter>();
 
-        if (jobExecuter == null)
-        {
-            throw new AbpException($"Could not resolve {jobExecuterType.FullName}");
-        }
+        // Look up the job handler type from ABP's options registry.
+        // ABP's BackgroundJobExecuter resolves context.JobType from DI,
+        // which must be the handler type (e.g. BackgroundEmailSendingJob),
+        // not the args type (e.g. BackgroundEmailSendingJobArgs).
+        var jobConfig = BackgroundJobOptions.GetJob(argsType);
 
-        var context = new JobExecutionContext(
-            scope.ServiceProvider,
-            argsType,
-            args);
+        var context = new JobExecutionContext(scope.ServiceProvider, jobConfig.JobType, args);
 
         await jobExecuter.ExecuteAsync(context);
     }
 
-    protected virtual void ConfigureClientBuilder<T>(T builder, PubSubConnectionConfiguration connection)
+    protected virtual void ConfigureClientBuilder<T>(
+        T builder,
+        PubSubConnectionConfiguration connection
+    )
         where T : class
     {
         if (!string.IsNullOrEmpty(connection.EmulatorHost))
