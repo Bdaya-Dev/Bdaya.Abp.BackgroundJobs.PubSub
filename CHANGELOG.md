@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.0.3...v2.1.0) (2026-03-14)
+
+
+### Features
+
+* **tests:** add end-to-end test for job handler execution path ([121065d](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/121065dd1efd761122a4571ee837bd084d5f1e44))
+
 ## [2.0.3](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.0.2...v2.0.3) (2026-02-22)
 
 
