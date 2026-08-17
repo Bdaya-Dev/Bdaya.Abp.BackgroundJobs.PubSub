@@ -79,9 +79,33 @@ public class DelayedJobDueTests
     }
 
     /// <summary>
+    /// An OFFSET-LESS timestamp is read as UTC, not as the host's local wall clock.
+    ///
+    /// <para>This is the one input shape that still carried the host-dependence after the first
+    /// pass at this fix, and it is invisible on a UTC host. Measured on a UTC+2 host before the
+    /// change: <c>"2026-01-01T00:00:00.0000000"</c> parsed to <c>2026-01-01T00:00:00+02:00</c>,
+    /// i.e. <b>22:00 UTC the previous day</b> — two hours out, and a different instant on every
+    /// machine. Caught by CodeRabbit on the PR and confirmed by direct measurement.</para>
+    /// </summary>
+    [Fact]
+    public void An_Offset_Less_Timestamp_Is_Read_As_Utc_Not_As_Host_Local_Time()
+    {
+        // Read as 00:00 UTC, so one second later it is due...
+        Due("2026-01-01T00:00:00.0000000", "2026-01-01T00:00:01Z").ShouldBeTrue();
+
+        // ...and one second earlier it is not. Under a host-local reading on any host EAST of
+        // UTC the first of these flips, and on any host WEST of UTC the second does.
+        Due("2026-01-01T00:00:00.0000000", "2025-12-31T23:59:59Z").ShouldBeFalse();
+    }
+
+    /// <summary>
     /// A missing or unreadable attribute must FAIL OPEN (run it) rather than closed (never run
     /// it). Failing closed would strand the job silently forever, which is the same class of
     /// defect #312 is about; failing open runs it early, which is visible and recoverable.
+    ///
+    /// <para>Note this is why an offset-less value is INTERPRETED (above) rather than rejected:
+    /// rejecting it would land here and discard the delay altogether, turning a retry ladder
+    /// into a hot loop.</para>
     /// </summary>
     [Theory]
     [InlineData(null)]

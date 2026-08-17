@@ -343,15 +343,7 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 // ladder rather than a redelivery hot loop (without it, a job delayed by
                 // minutes would be redelivered and re-NACKed continuously for its whole
                 // wait).
-                request.RetryPolicy = new RetryPolicy
-                {
-                    MinimumBackoff = Google.Protobuf.WellKnownTypes.Duration.FromTimeSpan(
-                        queueConfig.DelayedRetryMinimumBackoff
-                    ),
-                    MaximumBackoff = Google.Protobuf.WellKnownTypes.Duration.FromTimeSpan(
-                        queueConfig.DelayedRetryMaximumBackoff
-                    )
-                };
+                request.RetryPolicy = BuildDelayedRetryPolicy(queueConfig);
             }
             // Configure dead letter if enabled
             else if (
@@ -379,6 +371,54 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 subscriptionName.ToString()
             );
         }
+    }
+
+    /// <summary>
+    /// Pub/Sub's own bound on a subscription retry policy's backoff values.
+    /// </summary>
+    private static readonly TimeSpan MaxRetryBackoff = TimeSpan.FromSeconds(600);
+
+    /// <summary>
+    /// Builds the delayed subscription's retry policy, validating the configured backoffs first.
+    ///
+    /// <para>Pub/Sub rejects out-of-range values at CreateSubscription time with a generic
+    /// <c>INVALID_ARGUMENT</c> that names neither the offending knob nor the job type. Checking
+    /// here turns a misconfiguration into a message that says which setting, on which queue, and
+    /// what the bound is.</para>
+    /// </summary>
+    public static RetryPolicy BuildDelayedRetryPolicy(JobQueueConfiguration queueConfig)
+    {
+        var min = queueConfig.DelayedRetryMinimumBackoff;
+        var max = queueConfig.DelayedRetryMaximumBackoff;
+
+        static void Check(string name, TimeSpan value, JobQueueConfiguration cfg)
+        {
+            if (value < TimeSpan.Zero || value > MaxRetryBackoff)
+            {
+                throw new AbpException(
+                    $"{name} for job queue '{cfg.JobArgsType.Name}' is {value}, outside the range "
+                        + $"Pub/Sub accepts for a subscription retry policy (0s to {MaxRetryBackoff.TotalSeconds}s)."
+                );
+            }
+        }
+
+        Check(nameof(JobQueueConfiguration.DelayedRetryMinimumBackoff), min, queueConfig);
+        Check(nameof(JobQueueConfiguration.DelayedRetryMaximumBackoff), max, queueConfig);
+
+        if (max < min)
+        {
+            throw new AbpException(
+                $"{nameof(JobQueueConfiguration.DelayedRetryMaximumBackoff)} ({max}) is less than "
+                    + $"{nameof(JobQueueConfiguration.DelayedRetryMinimumBackoff)} ({min}) for job queue "
+                    + $"'{queueConfig.JobArgsType.Name}'."
+            );
+        }
+
+        return new RetryPolicy
+        {
+            MinimumBackoff = Google.Protobuf.WellKnownTypes.Duration.FromTimeSpan(min),
+            MaximumBackoff = Google.Protobuf.WellKnownTypes.Duration.FromTimeSpan(max)
+        };
     }
 
     /// <summary>
@@ -633,10 +673,23 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
             return true;
         }
 
+        // AssumeUniversal|AdjustToUniversal, NOT RoundtripKind. An OFFSET-LESS timestamp
+        // (no trailing Z and no +hh:mm) is the one shape that still reintroduced the exact
+        // host-dependence this method exists to remove: measured on a UTC+2 host,
+        // "2026-01-01T00:00:00.0000000" parsed under RoundtripKind to
+        // 2026-01-01T00:00:00+02:00 — i.e. 22:00 UTC the previous day, two hours off, and a
+        // different answer on every machine. AssumeUniversal reads it as UTC instead, which is
+        // both deterministic and what the publisher means (it writes DateTime.UtcNow.ToString("O")).
+        //
+        // Interpreting rather than rejecting is deliberate: rejecting would fail open and
+        // discard the delay entirely, turning a retry ladder into a hot loop. Assuming UTC
+        // preserves the delay and is wrong only for a producer that wrote LOCAL time with no
+        // offset — which nothing in this package does.
         return DateTimeOffset.TryParse(
             scheduledTimeAttribute,
             System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.RoundtripKind,
+            System.Globalization.DateTimeStyles.AssumeUniversal
+                | System.Globalization.DateTimeStyles.AdjustToUniversal,
             out var scheduledTime
         )
             ? now >= scheduledTime
