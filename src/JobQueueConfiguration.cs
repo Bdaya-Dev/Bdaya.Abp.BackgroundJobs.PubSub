@@ -64,6 +64,23 @@ public class JobQueueConfiguration
     /// </summary>
     public int? PrefetchCount { get; set; }
 
+    /// <summary>
+    /// Shortest redelivery backoff on the DELAYED subscription.
+    /// Default: 10 seconds (Google Pub/Sub's own default minimum backoff).
+    ///
+    /// <para>A delayed message that is not yet due is NACKed rather than executed, so this is
+    /// effectively the polling interval for "is it due yet". It therefore also bounds how late
+    /// a delayed job can fire: a job due in 3s on a 10s minimum backoff runs at ~10s. Lower it
+    /// when a job type needs tighter timing; Pub/Sub accepts 0s-600s.</para>
+    /// </summary>
+    public TimeSpan DelayedRetryMinimumBackoff { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Longest redelivery backoff on the DELAYED subscription.
+    /// Default: 600 seconds, which is also the maximum Pub/Sub accepts.
+    /// </summary>
+    public TimeSpan DelayedRetryMaximumBackoff { get; set; } = TimeSpan.FromSeconds(600);
+
     public JobQueueConfiguration(
         Type jobArgsType,
         string topicName,

@@ -75,8 +75,26 @@ public class AbpPubSubBackgroundJobOptions
     /// <summary>
     /// Dead letter topic suffix for failed jobs.
     /// If set, failed jobs will be moved to {TopicName}.{DeadLetterTopicSuffix}.
+    ///
+    /// <para>Applies to the IMMEDIATE subscription only. The delayed subscription deliberately
+    /// gets no dead-letter policy — see <c>PubSubBackgroundJobManager.CreateSubscriptionIfNotExistsAsync</c>
+    /// for why (its not-yet-due NACKs would otherwise exhaust the delivery-attempt budget and
+    /// dead-letter jobs purely for not being due).</para>
     /// </summary>
     public string? DeadLetterTopicSuffix { get; set; } = "DeadLetter";
+
+    /// <summary>
+    /// Default shortest redelivery backoff for DELAYED subscriptions.
+    /// Default: 10 seconds. See <see cref="JobQueueConfiguration.DelayedRetryMinimumBackoff"/>.
+    /// </summary>
+    public TimeSpan DelayedRetryMinimumBackoff { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Default longest redelivery backoff for DELAYED subscriptions.
+    /// Default: 600 seconds (the maximum Pub/Sub accepts).
+    /// See <see cref="JobQueueConfiguration.DelayedRetryMaximumBackoff"/>.
+    /// </summary>
+    public TimeSpan DelayedRetryMaximumBackoff { get; set; } = TimeSpan.FromSeconds(600);
 
     /// <summary>
     /// Dictionary of job-specific queue configurations.
@@ -118,7 +136,11 @@ public class AbpPubSubBackgroundJobOptions
             AckDeadlineSeconds,
             TimeSpan.FromDays(MessageRetentionDays),
             MaxDeliveryAttempts,
-            PrefetchCount);
+            PrefetchCount)
+        {
+            DelayedRetryMinimumBackoff = DelayedRetryMinimumBackoff,
+            DelayedRetryMaximumBackoff = DelayedRetryMaximumBackoff,
+        };
 
         JobQueues[argsType] = config;
         return config;

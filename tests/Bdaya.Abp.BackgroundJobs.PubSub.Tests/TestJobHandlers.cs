@@ -72,6 +72,27 @@ public class DelayedJobHandler : AsyncBackgroundJob<DelayedJobArgs>, ITransientD
 }
 
 /// <summary>
+/// Handler for the delayed end-to-end test (invora-backend#312). Records the wall-clock time
+/// each job body actually ran, so the test can assert the DELAY was honoured rather than merely
+/// that something executed.
+/// </summary>
+public class DelayedE2EJobHandler : AsyncBackgroundJob<DelayedE2EJobArgs>, ITransientDependency
+{
+    public static ConcurrentBag<(DelayedE2EJobArgs Args, DateTime ProcessedAt)> ProcessedJobs { get; } = new();
+
+    public override Task ExecuteAsync(DelayedE2EJobArgs args)
+    {
+        ProcessedJobs.Add((args, DateTime.UtcNow));
+        return Task.CompletedTask;
+    }
+
+    public static void Reset()
+    {
+        ProcessedJobs.Clear();
+    }
+}
+
+/// <summary>
 /// Test job handler for PriorityJobArgs.
 /// </summary>
 public class PriorityJobHandler : AsyncBackgroundJob<PriorityJobArgs>, ITransientDependency

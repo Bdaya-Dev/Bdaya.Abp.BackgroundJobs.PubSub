@@ -29,9 +29,17 @@ public class PubSubTestModule : AbpModule
         {
             options.DefaultTopicPrefix = "test-jobs";
             options.DefaultSubscriptionPrefix = "test-jobs";
+            options.DefaultDelayedTopicPrefix = "test-jobs.Delayed";
+            options.DefaultDelayedSubscriptionPrefix = "test-jobs.Delayed";
             options.AutoCreateTopics = true;
             options.AutoCreateSubscriptions = true;
             options.PrefetchCount = 1;
+
+            // A not-yet-due delayed message is NACKed and redelivered after this backoff, so it
+            // doubles as the poll interval for "is it due yet". Production defaults to 10s/600s;
+            // tests use seconds so a 3s-delay job is observed promptly instead of up to 10s late.
+            options.DelayedRetryMinimumBackoff = TimeSpan.FromSeconds(1);
+            options.DelayedRetryMaximumBackoff = TimeSpan.FromSeconds(5);
         });
 
         // Register test job handlers
