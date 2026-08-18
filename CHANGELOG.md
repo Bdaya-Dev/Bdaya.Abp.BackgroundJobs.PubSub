@@ -1,3 +1,12 @@
+## [2.1.1](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.1.0...v2.1.1) (2026-08-18)
+
+
+### Bug Fixes
+
+* consume the delayed topic, so delayed enqueues actually run ([45a6712](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/45a6712958c57f2433e35fab561887bdde4866d0)), closes [invora-backend#312](https://github.com/invora-backend/issues/312)
+* log when a delayed job's ScheduledTime is unparseable; guard the degrade ([3e702d7](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/3e702d7136209690ff2c3698ff2c0fbb5c636a07))
+* read an offset-less ScheduledTime as UTC; validate delayed backoffs ([b36292d](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/commit/b36292d62013ba9cd13338e552400a01b4d00409)), closes [#1](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/issues/1)
+
 # [2.1.0](https://github.com/Bdaya-Dev/Bdaya.Abp.BackgroundJobs.PubSub/compare/v2.0.3...v2.1.0) (2026-03-14)
 
 
