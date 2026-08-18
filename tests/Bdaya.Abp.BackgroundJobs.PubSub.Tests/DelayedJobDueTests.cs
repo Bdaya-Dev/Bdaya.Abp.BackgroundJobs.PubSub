@@ -101,11 +101,17 @@ public class DelayedJobDueTests
     /// <summary>
     /// A missing or unreadable attribute must FAIL OPEN (run it) rather than closed (never run
     /// it). Failing closed would strand the job silently forever, which is the same class of
-    /// defect #312 is about; failing open runs it early, which is visible and recoverable.
+    /// defect #312 is about; failing open runs it early, which is recoverable.
     ///
-    /// <para>Note this is why an offset-less value is INTERPRETED (above) rather than rejected:
-    /// rejecting it would land here and discard the delay altogether, turning a retry ladder
-    /// into a hot loop.</para>
+    /// <para>Early is not free, though, and the fall-through must not be silent about it — the
+    /// delay is LOST, which on a self-re-enqueueing job collapses its backoff ladder.
+    /// <c>ProcessJobMessageAsync</c> therefore logs a warning naming the message, job type and
+    /// offending value before running it. That log is what makes "recoverable" true rather than
+    /// aspirational; <see cref="TryParseScheduledTime_DistinguishesUnparseableFromNotYetDue"/>
+    /// pins the branch condition it depends on.</para>
+    ///
+    /// <para>Note this is also why an offset-less value is INTERPRETED (above) rather than
+    /// rejected: rejecting it would land here and discard the delay altogether.</para>
     /// </summary>
     [Theory]
     [InlineData(null)]
@@ -115,5 +121,36 @@ public class DelayedJobDueTests
     public void An_Absent_Or_Unparseable_Attribute_Is_Treated_As_Due(string? attribute)
     {
         Due(attribute, "2026-01-01T00:00:00Z").ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// The branch condition the "we lost this job's delay" warning hangs off.
+    ///
+    /// <para><see cref="PubSubBackgroundJobManager.IsDelayedJobDue"/> collapses "unparseable" and
+    /// "due now" to the same <c>true</c>, which is right for the decision but useless for
+    /// diagnosis — a caller that only has the predicate CANNOT tell a corrupted attribute from a
+    /// job that legitimately came due, and so cannot warn about the first without crying wolf on
+    /// the second. <c>TryParseScheduledTime</c> keeps them apart, which is what lets
+    /// <c>ProcessJobMessageAsync</c> log only in the case that actually lost information.</para>
+    /// </summary>
+    [Fact]
+    public void TryParseScheduledTime_DistinguishesUnparseableFromNotYetDue()
+    {
+        PubSubBackgroundJobManager
+            .TryParseScheduledTime("2026-01-01T00:00:00.0000000Z", out var parsed)
+            .ShouldBeTrue("a well-formed instant must parse");
+        parsed.ShouldBe(DateTimeOffset.Parse("2026-01-01T00:00:00Z",
+            System.Globalization.CultureInfo.InvariantCulture));
+
+        foreach (var bad in new[] { null, "", "   ", "not-a-timestamp", "2026-13-45T99:99:99Z" })
+        {
+            PubSubBackgroundJobManager.TryParseScheduledTime(bad, out _)
+                .ShouldBeFalse($"'{bad}' is not a readable instant and must be reported as such, " +
+                    "not silently treated as 'due now'");
+
+            // ...and the predicate still runs it, so the two are genuinely different answers to
+            // different questions rather than a distinction without a difference.
+            Due(bad, "2026-01-01T00:00:00Z").ShouldBeTrue();
+        }
     }
 }

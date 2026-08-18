@@ -43,6 +43,17 @@ public class DelayedE2EJobArgs
 }
 
 /// <summary>
+/// Job args whose queue is deliberately configured with an OUT-OF-RANGE delayed retry backoff
+/// (see <c>PubSubTestModule</c>), so starting its delayed consumer fails. Used to pin that
+/// <c>StartProcessingAsync</c> degrades instead of throwing — a throw would abort ABP startup for
+/// the whole application, since consumers call it from <c>OnApplicationInitializationAsync</c>.
+/// </summary>
+public class DegradedDelayedJobArgs
+{
+    public string Payload { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Test job arguments for priority testing.
 /// </summary>
 public class PriorityJobArgs

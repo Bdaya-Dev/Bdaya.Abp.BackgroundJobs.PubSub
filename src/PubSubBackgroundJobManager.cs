@@ -645,13 +645,35 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
         try
         {
             // Check if this is a delayed job that's not ready yet
-            if (
-                message.Attributes.TryGetValue("ScheduledTime", out var scheduledTimeStr)
-                && !IsDelayedJobDue(scheduledTimeStr, DateTimeOffset.UtcNow)
-            )
+            if (message.Attributes.TryGetValue("ScheduledTime", out var scheduledTimeStr))
             {
-                // Job is not ready yet, nack to requeue
-                return SubscriberClient.Reply.Nack;
+                if (TryParseScheduledTime(scheduledTimeStr, out var scheduledTime))
+                {
+                    if (DateTimeOffset.UtcNow < scheduledTime)
+                    {
+                        // Job is not ready yet, nack to requeue
+                        return SubscriberClient.Reply.Nack;
+                    }
+                }
+                else
+                {
+                    // Fail OPEN — run it now rather than strand it forever (see
+                    // IsDelayedJobDue) — but say so. Without this the fall-through is
+                    // completely silent: a corrupted attribute quietly converts a delayed
+                    // job into an immediate one, and on a self-re-enqueueing consumer such
+                    // as WebhookDeliveryJob that is the collapsed retry ladder the
+                    // interpret-don't-reject choice exists to avoid, with nothing left
+                    // behind to diagnose it from.
+                    Logger.LogWarning(
+                        "Delayed job message {MessageId} for {JobType} carries an unparseable "
+                            + "ScheduledTime attribute ('{ScheduledTime}'). Running it NOW rather "
+                            + "than stranding it, but its delay is LOST — a job that re-enqueues "
+                            + "itself with a backoff will retry without one until this is fixed.",
+                        message.MessageId,
+                        typeof(TArgs).Name,
+                        scheduledTimeStr
+                    );
+                }
             }
 
             var argsType = typeof(TArgs);
@@ -715,9 +737,14 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
     /// the job was NACKed for a further three hours.
     ///
     /// <para>It survived because containers conventionally run UTC, where the offset is zero and
-    /// the bug is invisible — the failure only appears off the machines CI runs on. An
-    /// unparseable attribute is treated as DUE rather than never-due, so a malformed value
-    /// cannot strand a job forever (it will run early and loudly rather than vanish quietly).</para>
+    /// the bug is invisible — the failure only appears off the machines CI runs on.</para>
+    ///
+    /// <para>An unparseable attribute is treated as DUE rather than never-due, so a malformed
+    /// value cannot strand a job forever. That fall-through loses the delay, so it is NOT silent:
+    /// <see cref="ProcessJobMessageAsync{TArgs}"/> logs a warning naming the message, the job type
+    /// and the offending value before running it. This predicate itself is a pure function and
+    /// cannot log — use <see cref="TryParseScheduledTime"/> if you need to tell "unparseable" from
+    /// "not due yet", which is exactly the distinction that warning depends on.</para>
     /// </remarks>
     public static bool IsDelayedJobDue(string? scheduledTimeAttribute, DateTimeOffset now)
     {
@@ -726,27 +753,47 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
             return true;
         }
 
-        // AssumeUniversal|AdjustToUniversal, NOT RoundtripKind. An OFFSET-LESS timestamp
-        // (no trailing Z and no +hh:mm) is the one shape that still reintroduced the exact
-        // host-dependence this method exists to remove: measured on a UTC+2 host,
-        // "2026-01-01T00:00:00.0000000" parsed under RoundtripKind to
-        // 2026-01-01T00:00:00+02:00 — i.e. 22:00 UTC the previous day, two hours off, and a
-        // different answer on every machine. AssumeUniversal reads it as UTC instead, which is
-        // both deterministic and what the publisher means (it writes DateTime.UtcNow.ToString("O")).
-        //
-        // Interpreting rather than rejecting is deliberate: rejecting would fail open and
-        // discard the delay entirely, turning a retry ladder into a hot loop. Assuming UTC
-        // preserves the delay and is wrong only for a producer that wrote LOCAL time with no
-        // offset — which nothing in this package does.
-        return DateTimeOffset.TryParse(
-            scheduledTimeAttribute,
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal
-                | System.Globalization.DateTimeStyles.AdjustToUniversal,
-            out var scheduledTime
-        )
+        return TryParseScheduledTime(scheduledTimeAttribute, out var scheduledTime)
             ? now >= scheduledTime
             : true;
+    }
+
+    /// <summary>
+    /// Parses a <c>ScheduledTime</c> message attribute into an absolute instant. Returns
+    /// <c>false</c> when the value is absent or unreadable — which callers with a logger MUST
+    /// distinguish from "not due yet", because the two lead to opposite actions and only one of
+    /// them is worth telling an operator about.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// Uses <c>AssumeUniversal | AdjustToUniversal</c>, NOT <c>RoundtripKind</c>. An OFFSET-LESS
+    /// timestamp (no trailing <c>Z</c> and no <c>+hh:mm</c>) is the one shape that still
+    /// reintroduced the exact host-dependence this parsing exists to remove: measured on a UTC+2
+    /// host, <c>"2026-01-01T00:00:00.0000000"</c> parsed under <c>RoundtripKind</c> to
+    /// <c>2026-01-01T00:00:00+02:00</c> — 22:00 UTC the previous day, two hours off, and a
+    /// different instant on every machine. <c>AssumeUniversal</c> reads it as UTC, which is both
+    /// deterministic and what the publisher means (<see cref="EnqueueDelayedAsync{TArgs}"/> writes
+    /// <c>DateTime.UtcNow.ToString("O")</c>).
+    ///
+    /// <para>Interpreting an offset-less value rather than rejecting it is deliberate: rejecting
+    /// would take the fail-open path and discard the delay entirely, turning a retry ladder into a
+    /// hot loop. Assuming UTC preserves the delay and is wrong only for a producer that wrote LOCAL
+    /// time with no offset — which nothing in this package does.</para>
+    /// </remarks>
+    public static bool TryParseScheduledTime(
+        string? scheduledTimeAttribute,
+        out DateTimeOffset scheduledTime
+    )
+    {
+        scheduledTime = default;
+        return !string.IsNullOrWhiteSpace(scheduledTimeAttribute)
+            && DateTimeOffset.TryParse(
+                scheduledTimeAttribute,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal
+                    | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out scheduledTime
+            );
     }
 
     protected virtual async Task ExecuteJobAsync(System.Type argsType, object args)

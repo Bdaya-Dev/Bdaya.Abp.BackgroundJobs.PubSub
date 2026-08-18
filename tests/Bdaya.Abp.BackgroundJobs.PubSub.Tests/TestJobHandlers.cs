@@ -93,6 +93,26 @@ public class DelayedE2EJobHandler : AsyncBackgroundJob<DelayedE2EJobArgs>, ITran
 }
 
 /// <summary>
+/// Handler for the degraded-delayed-startup guard. Its only job is to prove the IMMEDIATE path
+/// still delivers after the delayed path failed to start.
+/// </summary>
+public class DegradedDelayedJobHandler : AsyncBackgroundJob<DegradedDelayedJobArgs>, ITransientDependency
+{
+    public static ConcurrentBag<DegradedDelayedJobArgs> ProcessedJobs { get; } = new();
+
+    public override Task ExecuteAsync(DegradedDelayedJobArgs args)
+    {
+        ProcessedJobs.Add(args);
+        return Task.CompletedTask;
+    }
+
+    public static void Reset()
+    {
+        ProcessedJobs.Clear();
+    }
+}
+
+/// <summary>
 /// Test job handler for PriorityJobArgs.
 /// </summary>
 public class PriorityJobHandler : AsyncBackgroundJob<PriorityJobArgs>, ITransientDependency

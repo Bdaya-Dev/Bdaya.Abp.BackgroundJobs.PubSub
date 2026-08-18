@@ -288,6 +288,46 @@ public class PubSubBackgroundJobManagerTests(PubSubEmulatorFixture fixture) : IC
                 + "immediate queue and the delay was ignored.");
     }
 
+    /// <summary>
+    /// A failure starting the DELAYED consumer must degrade, not propagate.
+    ///
+    /// <para>Consumers call <c>StartProcessingAsync</c> from their module's
+    /// <c>OnApplicationInitializationAsync</c>, so an exception escaping it aborts ABP startup for
+    /// the WHOLE APPLICATION — not merely one job type. That exposure is real and lands on
+    /// upgrade: every existing consumer creates its <c>.Delayed</c> subscriptions for the first
+    /// time on taking this version, and <c>CreateSubscriptionIfNotExistsAsync</c> catches only
+    /// <c>NotFound</c>, so e.g. a <c>PermissionDenied</c> on those brand-new topics would escape.
+    /// Trading a whole-application startup failure for one job type losing its delayed capability
+    /// is clearly the right way round, and this pins it.</para>
+    ///
+    /// <para><c>DegradedDelayedJobArgs</c> is configured with an out-of-range delayed backoff
+    /// (<c>PubSubTestModule</c>), which is a deterministic way to make exactly that half fail.
+    /// The second assertion is the one that matters: it is not enough that nothing threw — the
+    /// IMMEDIATE path must still actually deliver, or "degraded" would just mean "broken".</para>
+    /// </summary>
+    [Fact]
+    public async Task StartProcessingAsync_WhenTheDelayedConsumerFailsToStart_DegradesInsteadOfThrowing()
+    {
+        var jobManager = _scope!.ServiceProvider.GetRequiredService<IPubSubBackgroundJobManager>();
+        DegradedDelayedJobHandler.Reset();
+
+        await Should.NotThrowAsync(
+            () => jobManager.StartProcessingAsync<DegradedDelayedJobArgs>());
+
+        await jobManager.EnqueueAsync(new DegradedDelayedJobArgs { Payload = "immediate-survives" });
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (DegradedDelayedJobHandler.ProcessedJobs.IsEmpty && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+
+        DegradedDelayedJobHandler.ProcessedJobs.ShouldNotBeEmpty(
+            "the immediate consumer must still deliver after the delayed one failed to start -- "
+                + "otherwise the catch is not degrading, it is hiding a total failure.");
+        DegradedDelayedJobHandler.ProcessedJobs.First().Payload.ShouldBe("immediate-survives");
+    }
+
     [Fact]
     public void ConnectionPool_Should_Throw_For_Unknown_Connection()
     {
