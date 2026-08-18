@@ -231,6 +231,103 @@ public class PubSubBackgroundJobManagerTests(PubSubEmulatorFixture fixture) : IC
         processed.Value.ShouldBe(999);
     }
 
+    /// <summary>
+    /// invora-backend#312 — a DELAYED enqueue must actually execute.
+    ///
+    /// <para><c>Should_Enqueue_Delayed_Job</c> above asserts only that a job id came back, which
+    /// is true even when the message is thrown away: <c>EnqueueDelayedAsync</c> publishes to a
+    /// topic distinct from the immediate one, nothing ever subscribed to it, and Pub/Sub
+    /// DISCARDS messages published to a topic with zero subscriptions. So the delayed path was a
+    /// silent no-op on every deployment of this package while its test stayed green — the id it
+    /// asserted on is minted client-side before the publish and says nothing about delivery.</para>
+    ///
+    /// <para>This test closes that gap end to end: start processing, enqueue with a delay, and
+    /// require the job BODY to have run. The second assertion is the discrimination control —
+    /// the recorded execution time must be at or after the scheduled time, which distinguishes
+    /// "the delayed pipeline delivered it when due" from "it leaked onto the immediate topic and
+    /// ran at once". Without it, a regression that routed delayed jobs straight to the immediate
+    /// queue would still pass.</para>
+    /// </summary>
+    [Fact]
+    public async Task Should_Execute_Delayed_Job_EndToEnd()
+    {
+        // Arrange
+        var jobManager = _scope!.ServiceProvider.GetRequiredService<IPubSubBackgroundJobManager>();
+        DelayedE2EJobHandler.Reset();
+
+        var delay = TimeSpan.FromSeconds(3);
+        var args = new DelayedE2EJobArgs { Payload = "Delayed E2E" };
+
+        // Act — subscribe first, then enqueue with a delay.
+        await jobManager.StartProcessingAsync<DelayedE2EJobArgs>();
+
+        var enqueuedAt = DateTime.UtcNow;
+        var jobId = await jobManager.EnqueueAsync(args, delay: delay);
+        var notBefore = enqueuedAt + delay;
+
+        jobId.ShouldNotBeNullOrEmpty();
+
+        // Assert — wait for the handler to run. The budget covers the delay itself plus the
+        // subscription's redelivery backoff (PubSubTestModule shortens it for tests).
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(90);
+        while (DelayedE2EJobHandler.ProcessedJobs.IsEmpty && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(250, TestContext.Current.CancellationToken);
+        }
+
+        DelayedE2EJobHandler.ProcessedJobs.ShouldNotBeEmpty(
+            "a delayed enqueue must actually execute -- if this is empty the delayed topic has "
+                + "no subscription and Pub/Sub discarded the message (invora-backend#312).");
+
+        var (processedArgs, processedAt) = DelayedE2EJobHandler.ProcessedJobs.First();
+        processedArgs.Payload.ShouldBe("Delayed E2E");
+
+        // CONTROL: proves the message travelled the DELAYED path, not the immediate one.
+        processedAt.ShouldBeGreaterThanOrEqualTo(notBefore,
+            "a delayed job must not run before it is due -- running early means it reached the "
+                + "immediate queue and the delay was ignored.");
+    }
+
+    /// <summary>
+    /// A failure starting the DELAYED consumer must degrade, not propagate.
+    ///
+    /// <para>Consumers call <c>StartProcessingAsync</c> from their module's
+    /// <c>OnApplicationInitializationAsync</c>, so an exception escaping it aborts ABP startup for
+    /// the WHOLE APPLICATION — not merely one job type. That exposure is real and lands on
+    /// upgrade: every existing consumer creates its <c>.Delayed</c> subscriptions for the first
+    /// time on taking this version, and <c>CreateSubscriptionIfNotExistsAsync</c> catches only
+    /// <c>NotFound</c>, so e.g. a <c>PermissionDenied</c> on those brand-new topics would escape.
+    /// Trading a whole-application startup failure for one job type losing its delayed capability
+    /// is clearly the right way round, and this pins it.</para>
+    ///
+    /// <para><c>DegradedDelayedJobArgs</c> is configured with an out-of-range delayed backoff
+    /// (<c>PubSubTestModule</c>), which is a deterministic way to make exactly that half fail.
+    /// The second assertion is the one that matters: it is not enough that nothing threw — the
+    /// IMMEDIATE path must still actually deliver, or "degraded" would just mean "broken".</para>
+    /// </summary>
+    [Fact]
+    public async Task StartProcessingAsync_WhenTheDelayedConsumerFailsToStart_DegradesInsteadOfThrowing()
+    {
+        var jobManager = _scope!.ServiceProvider.GetRequiredService<IPubSubBackgroundJobManager>();
+        DegradedDelayedJobHandler.Reset();
+
+        await Should.NotThrowAsync(
+            () => jobManager.StartProcessingAsync<DegradedDelayedJobArgs>());
+
+        await jobManager.EnqueueAsync(new DegradedDelayedJobArgs { Payload = "immediate-survives" });
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (DegradedDelayedJobHandler.ProcessedJobs.IsEmpty && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+
+        DegradedDelayedJobHandler.ProcessedJobs.ShouldNotBeEmpty(
+            "the immediate consumer must still deliver after the delayed one failed to start -- "
+                + "otherwise the catch is not degrading, it is hiding a total failure.");
+        DegradedDelayedJobHandler.ProcessedJobs.First().Payload.ShouldBe("immediate-survives");
+    }
+
     [Fact]
     public void ConnectionPool_Should_Throw_For_Unknown_Connection()
     {

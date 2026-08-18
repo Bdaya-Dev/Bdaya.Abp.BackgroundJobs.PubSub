@@ -64,6 +64,40 @@ public class JobQueueConfiguration
     /// </summary>
     public int? PrefetchCount { get; set; }
 
+    /// <summary>
+    /// Shortest redelivery backoff on the DELAYED subscription — the FIRST retry interval only.
+    /// Default: 10 seconds (Google Pub/Sub's own default minimum backoff). Accepted range 0s-600s.
+    ///
+    /// <para>A delayed message that is not yet due is NACKed rather than executed, so the
+    /// redelivery interval doubles as the "is it due yet" poll. But Pub/Sub's retry policy is
+    /// EXPONENTIAL — per Google's spec, "retry delay will be exponential based on provided
+    /// minimum and maximum backoffs" — so the interval starts here and CLIMBS toward
+    /// <see cref="DelayedRetryMaximumBackoff"/>. This value bounds only the first interval.</para>
+    ///
+    /// <para>⚠️ It does NOT bound how late a job can fire, and lowering it will not deliver
+    /// tighter timing for any delay long enough to climb the ladder — for that, lower
+    /// <see cref="DelayedRetryMaximumBackoff"/>. See its remarks for the worked consequence.</para>
+    /// </summary>
+    public TimeSpan DelayedRetryMinimumBackoff { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Longest redelivery backoff on the DELAYED subscription, and therefore the knob that
+    /// actually bounds LATENESS. Default: 600 seconds, which is also the maximum Pub/Sub accepts.
+    ///
+    /// <para>Because the interval grows exponentially from
+    /// <see cref="DelayedRetryMinimumBackoff"/> toward this value, a job is checked for
+    /// due-ness less and less often the longer it waits — so a long delay can overshoot by up to
+    /// roughly this much. On the shipped 10s/600s defaults a retry ladder of 30s/120s/480s lands
+    /// its later rungs late by MINUTES, not by ~10s. Lower this when a job type needs its delay
+    /// honoured tightly, accepting more redelivery traffic in exchange.</para>
+    ///
+    /// <para>⚠️ Applied at subscription CREATION only. Changing either backoff has no effect on
+    /// a subscription that already exists — Pub/Sub keeps the policy it was created with, and
+    /// <c>CreateSubscriptionIfNotExistsAsync</c> returns early when the subscription is found.
+    /// Delete the subscription (or patch it out of band) to re-apply.</para>
+    /// </summary>
+    public TimeSpan DelayedRetryMaximumBackoff { get; set; } = TimeSpan.FromSeconds(600);
+
     public JobQueueConfiguration(
         Type jobArgsType,
         string topicName,
