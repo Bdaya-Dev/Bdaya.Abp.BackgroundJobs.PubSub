@@ -35,9 +35,10 @@ public class PubSubTestModule : AbpModule
             options.AutoCreateSubscriptions = true;
             options.PrefetchCount = 1;
 
-            // A not-yet-due delayed message is NACKed and redelivered after this backoff, so it
-            // doubles as the poll interval for "is it due yet". Production defaults to 10s/600s;
-            // tests use seconds so a 3s-delay job is observed promptly instead of up to 10s late.
+            // A not-yet-due delayed message is NACKed and redelivered after a backoff that grows
+            // EXPONENTIALLY from the minimum toward the maximum, so the maximum is what bounds how
+            // late a job can fire. Production defaults are 10s/600s; both are squeezed here so a
+            // 3s-delay job is observed within the test's budget rather than up to 600s late.
             options.DelayedRetryMinimumBackoff = TimeSpan.FromSeconds(1);
             options.DelayedRetryMaximumBackoff = TimeSpan.FromSeconds(5);
         });

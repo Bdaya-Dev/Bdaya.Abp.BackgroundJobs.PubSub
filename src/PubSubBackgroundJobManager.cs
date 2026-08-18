@@ -339,10 +339,22 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
                 // this subscription exists to deliver. Hence: no dead-letter policy on the
                 // delayed subscription.
                 //
+                // ⚠️ THE COST OF THAT CHOICE, stated so it is not discovered the hard way:
+                // no policy also means no attempt cap here. A delayed job whose BODY keeps
+                // throwing a non-AbpException is redelivered until MessageRetentionDuration
+                // expires (7 days by default) and is then dropped with NO dead-letter
+                // record — where the immediate subscription would have preserved it after
+                // MaxDeliveryAttempts. An empty `.DeadLetter` topic is therefore NOT
+                // evidence that no delayed jobs were lost. Same reason, same silence: a
+                // `delay` longer than MessageRetentionDuration expires before it comes due,
+                // so the job never runs at all.
+                //
                 // A RetryPolicy instead turns those NACKs into an exponential-backoff
                 // ladder rather than a redelivery hot loop (without it, a job delayed by
                 // minutes would be redelivered and re-NACKed continuously for its whole
-                // wait).
+                // wait). Exponential means the interval CLIMBS from
+                // DelayedRetryMinimumBackoff toward DelayedRetryMaximumBackoff, so it is the
+                // MAXIMUM that bounds how late a job can fire — see those two properties.
                 request.RetryPolicy = BuildDelayedRetryPolicy(queueConfig);
             }
             // Configure dead letter if enabled
@@ -499,6 +511,27 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
     /// until they come due; the subscription's retry policy (see
     /// <see cref="CreateSubscriptionIfNotExistsAsync"/>) turns those NACKs into a backoff ladder.
     /// </summary>
+    ///
+    /// <remarks>
+    /// <b>This method never throws — it degrades loudly instead, and that is deliberate.</b>
+    ///
+    /// <para>Before delayed consumption existed, <see cref="StartProcessingAsync{TArgs}"/> could
+    /// only fail on the immediate path. Adding this step introduced a NEW way for it to throw,
+    /// and consumers call it from their module's <c>OnApplicationInitializationAsync</c> — so an
+    /// exception here would abort ABP startup for the WHOLE APPLICATION, not merely leave one job
+    /// type degraded. The exposure is real and lands precisely on upgrade: because
+    /// <c>GetOrCreateJobQueue</c> always populates the delayed names, every existing consumer will
+    /// try to CREATE its <c>.Delayed</c> subscriptions for the first time the moment it takes this
+    /// version, and <see cref="CreateSubscriptionIfNotExistsAsync"/> only catches
+    /// <c>NotFound</c> — a <c>PermissionDenied</c> from a service account with no rights on those
+    /// brand-new topics would propagate straight out.</para>
+    ///
+    /// <para>Trading a whole-application startup failure for one job type losing its delayed
+    /// capability is clearly the right way round. And degrading here is NOT the silent-no-op
+    /// failure this whole change exists to remove: that defect produced no signal at all, whereas
+    /// this logs at ERROR, names the job type, and states in the message that delayed jobs will
+    /// not run.</para>
+    /// </remarks>
     protected virtual async Task StartProcessingDelayedAsync<TArgs>(
         System.Type argsType,
         JobQueueConfiguration queueConfig,
@@ -523,23 +556,43 @@ public class PubSubBackgroundJobManager : IPubSubBackgroundJobManager, ISingleto
             return;
         }
 
-        var delayedTopicName = await EnsureDelayedTopicExistsAsync(argsType, queueConfig);
-        var delayedSubscriptionName = await EnsureDelayedSubscriptionExistsAsync(
-            queueConfig,
-            delayedTopicName
-        );
+        try
+        {
+            var delayedTopicName = await EnsureDelayedTopicExistsAsync(argsType, queueConfig);
+            var delayedSubscriptionName = await EnsureDelayedSubscriptionExistsAsync(
+                queueConfig,
+                delayedTopicName
+            );
 
-        DelayedSubscribers[argsType] = await StartSubscriberAsync<TArgs>(
-            delayedSubscriptionName,
-            queueConfig,
-            connection
-        );
+            DelayedSubscribers[argsType] = await StartSubscriberAsync<TArgs>(
+                delayedSubscriptionName,
+                queueConfig,
+                connection
+            );
 
-        Logger.LogInformation(
-            "Started processing DELAYED jobs for {JobType} from subscription {SubscriptionName}",
-            argsType.Name,
-            delayedSubscriptionName.ToString()
-        );
+            Logger.LogInformation(
+                "Started processing DELAYED jobs for {JobType} from subscription {SubscriptionName}",
+                argsType.Name,
+                delayedSubscriptionName.ToString()
+            );
+        }
+        catch (Exception ex)
+        {
+            // See the remarks above for why this is caught rather than propagated. LogError,
+            // not LogWarning: a job type that accepts a delayed enqueue and never runs it is
+            // an error state, and the whole point of this change is that such a state must
+            // never again be reachable without a signal.
+            Logger.LogError(
+                ex,
+                "Failed to start the DELAYED job consumer for {JobType} (topic {DelayedTopic}, "
+                    + "subscription {DelayedSubscription}). Immediate jobs for this type are "
+                    + "unaffected and still running, but EnqueueAsync(..., delay: ...) for it will "
+                    + "NOT execute until this is resolved.",
+                argsType.Name,
+                queueConfig.DelayedTopicName,
+                queueConfig.DelayedSubscriptionName
+            );
+        }
     }
 
     /// <summary>
